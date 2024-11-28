@@ -177,7 +177,7 @@ class ChatServer(
             if (config.logging) {
                 logger.log("Failed to authenticate client: $sender")
             }
-            sendMessage(sender, TextMessage(networkAddress, "Authentication failed", null))
+            sendMessage(sender, TextMessage(networkAddress, "Authentication failed.", null))
             return false
         }
     }
@@ -275,7 +275,8 @@ class ChatClient(
                 logger.log("Sending message: $textMessage")
             }
             sendMessage(textMessage)
-        }
+        }else
+            throw ConfigurationError()
     }
 
     fun authenticate(username: String, password: String){
@@ -283,7 +284,7 @@ class ChatClient(
             if (!authenticated){
                 val authenticationMessage = AuthenticationMessage(networkAddress, username, password)
                 if (config.logging){
-                    logger.log("Sending authentication message: $authenticationMessage")
+                    logger.log("Sending authentication request: $authenticationMessage")
                 }
                 sendMessage(authenticationMessage)
             }
