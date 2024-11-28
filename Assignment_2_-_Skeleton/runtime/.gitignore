@@ -1,4 +1,5 @@
 .gradle
+.idea/detekt.xml
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
