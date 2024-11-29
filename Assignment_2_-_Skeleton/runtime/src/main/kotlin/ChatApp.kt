@@ -82,7 +82,7 @@ data class TextMessage(override val sender: Int, val message: String, val color:
     override fun decrypt(encryption: EncryptionMethod): Message {
         return TextMessage(sender, encryption.decrypt(message), color)
     }
-
+    override fun toString(): String = "[$sender] $message"
 }
 
 data class ConnectionMessage(override val sender: Int) : Message {
@@ -93,6 +93,7 @@ data class ConnectionMessage(override val sender: Int) : Message {
     override fun decrypt(encryption: EncryptionMethod): Message {
         return this
     }
+    override fun toString(): String = "[$sender] Connecting to server."
 
 }
 
@@ -104,6 +105,7 @@ data class AuthenticationMessage(override val sender: Int, val username: String,
     override fun decrypt(encryption: EncryptionMethod): Message {
         return AuthenticationMessage(sender, encryption.decrypt(username), encryption.decrypt(password))
     }
+    override fun toString(): String = "[$sender] u=$username p=$password"
 }
 
 //==============================================================================
@@ -288,7 +290,8 @@ class ChatClient(
                 }
                 sendMessage(authenticationMessage)
             }
-        }
+        } else
+            throw ConfigurationError()
     }
 }
 
