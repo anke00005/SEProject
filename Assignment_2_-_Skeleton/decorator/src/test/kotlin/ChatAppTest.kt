@@ -246,7 +246,8 @@ class ChatAppTest {
   fun testServerSendsUncoloredMessages() {
     val network = NetworkSimulator<Message>()
     val messageFactory = ColoringMessageFactory(MessageFactoryImpl())
-    val server = AuthenticatingServer(ChatServerImpl(messageFactory, network))
+    val server = AuthenticatingServer(ChatServerImpl(messageFactory, network),
+      mapOf("user" to "CorrectHorseBatteryStaple"))
     val client = AuthenticatingClient(
       ColoringClient(
         ChatClientImpl(

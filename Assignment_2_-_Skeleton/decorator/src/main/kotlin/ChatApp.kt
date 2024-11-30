@@ -1,7 +1,8 @@
-
+import util.Logger
 import util.NetworkClient
 import util.NetworkSimulator
 import util.View
+import kotlin.properties.Delegates
 
 /**
  * Exception that is thrown when functionality is accessed that is not
@@ -14,40 +15,40 @@ class ConfigurationError : RuntimeException()
  * Interface for encryption methods.
  */
 sealed interface EncryptionMethod {
-  fun encrypt(str: String): String
-  fun decrypt(str: String): String
+    fun encrypt(str: String): String
+    fun decrypt(str: String): String
 }
 
 /**
  * ROT13 "encryption".
  */
 data object ROT13 : EncryptionMethod {
-  // This allows writing "<Int> + <Char>" in the encrypt function below.
-  operator fun Int.plus(c: Char): Int = this + c.code
+    // This allows writing "<Int> + <Char>" in the encrypt function below.
+    operator fun Int.plus(c: Char): Int = this + c.code
 
-  override fun encrypt(str: String): String =
-    str.map { c ->
-      when {
-        (c >= 'A') && (c <= 'Z') ->
-          ((c - 'A' + 13) % 26 + 'A').toChar()
+    override fun encrypt(str: String): String =
+        str.map { c ->
+            when {
+                (c >= 'A') && (c <= 'Z') ->
+                    ((c - 'A' + 13) % 26 + 'A').toChar()
 
-        (c >= 'a') && (c <= 'z') ->
-          ((c - 'a' + 13) % 26 + 'a').toChar()
+                (c >= 'a') && (c <= 'z') ->
+                    ((c - 'a' + 13) % 26 + 'a').toChar()
 
-        else -> c
-      }
-    }.joinToString("")
+                else -> c
+            }
+        }.joinToString("")
 
-  override fun decrypt(str: String): String = encrypt(str)
+    override fun decrypt(str: String): String = encrypt(str)
 }
 
 /**
  * String-reversal "encryption".
  */
 data object REVERSE : EncryptionMethod {
-  override fun encrypt(str: String): String = str.reversed()
+    override fun encrypt(str: String): String = str.reversed()
 
-  override fun decrypt(str: String): String = encrypt(str)
+    override fun decrypt(str: String): String = encrypt(str)
 }
 
 //==============================================================================
@@ -57,10 +58,43 @@ data object REVERSE : EncryptionMethod {
  * Interface for all message types.
  */
 sealed interface Message {
-  val sender: Int
+    val sender: Int
 
-  fun encrypt(encryption: EncryptionMethod): Message
-  fun decrypt(encryption: EncryptionMethod): Message
+    fun encrypt(encryption: EncryptionMethod): Message
+    fun decrypt(encryption: EncryptionMethod): Message
+}
+data class TextMessage(override val sender: Int, val message: String, val color: String?) : Message {
+    override fun encrypt(encryption: EncryptionMethod): Message {
+        return TextMessage(sender, encryption.encrypt(message), color)
+    }
+
+    override fun decrypt(encryption: EncryptionMethod): Message {
+        return TextMessage(sender, encryption.decrypt(message), color)
+    }
+    override fun toString(): String = "[$sender] $message"
+}
+
+data class ConnectionMessage(override val sender: Int) : Message {
+    override fun encrypt(encryption: EncryptionMethod): Message {
+        return this
+    }
+
+    override fun decrypt(encryption: EncryptionMethod): Message {
+        return this
+    }
+    override fun toString(): String = "[$sender] Connecting to server."
+
+}
+
+data class AuthenticationMessage(override val sender: Int, val username: String, val password: String) : Message {
+    override fun encrypt(encryption: EncryptionMethod): Message {
+        return AuthenticationMessage(sender, encryption.encrypt(username), encryption.encrypt(password))
+    }
+
+    override fun decrypt(encryption: EncryptionMethod): Message {
+        return AuthenticationMessage(sender, encryption.decrypt(username), encryption.decrypt(password))
+    }
+    override fun toString(): String = "[$sender] u=$username p=$password"
 }
 
 // TODO: implement task b)
@@ -73,35 +107,37 @@ sealed interface Message {
  * implementations.
  */
 interface MessageFactory {
-  fun connectionMessage(sender: Int): Message
-  fun textMessage(sender: Int, message: String): Message
-  fun coloredTextMessage(sender: Int, message: String, color: String): Message
-  fun authenticationMessage(
-    sender: Int,
-    user: String,
-    password: String
-  ): Message
+    fun connectionMessage(sender: Int): Message
+    fun textMessage(sender: Int, message: String): Message
+    fun coloredTextMessage(sender: Int, message: String, color: String): Message
+    fun authenticationMessage(
+        sender: Int,
+        user: String,
+        password: String
+    ): Message
 }
 
 class MessageFactoryImpl : MessageFactory {
-  override fun connectionMessage(sender: Int): Message {
-    TODO("Not yet implemented")
-  }
+    override fun connectionMessage(sender: Int): Message {
+        return connectionMessage(sender)
+    }
 
-  override fun textMessage(sender: Int, message: String): Message {
-    TODO("Not yet implemented")
-  }
+    override fun textMessage(sender: Int, message: String): Message {
+        return TextMessage(sender, message,null)
+    }
 
-  override fun coloredTextMessage(sender: Int, message: String, color: String): Message {
-    TODO("Not yet implemented")
-  }
+    override fun coloredTextMessage(sender: Int, message: String, color: String): Message {
+        //Might need to throw configuration error
+        return TextMessage(sender, message, color)
+    }
 
-  override fun authenticationMessage(sender: Int, user: String, password: String): Message {
-    TODO("Not yet implemented")
-  }
+    override fun authenticationMessage(sender: Int, user: String, password: String): Message {
+        //Might need to throw configuration error
+        return AuthenticationMessage(sender, user, password)
+    }
 }
 
-abstract class MessageFactoryDecorator(private val messageFactory: MessageFactory): MessageFactory{
+abstract class MessageFactoryDecorator(private val messageFactory: MessageFactory) : MessageFactory {
     override fun connectionMessage(sender: Int): Message {
         return messageFactory.connectionMessage(sender)
     }
@@ -120,48 +156,53 @@ abstract class MessageFactoryDecorator(private val messageFactory: MessageFactor
 
 
 }
-class EncryptingMessageFactory(private val  messageFactory: MessageFactory, private val encryption: EncryptionMethod) : MessageFactoryDecorator(messageFactory){
-  override fun connectionMessage(sender: Int): Message {
-    TODO("Not yet implemented")
-  }
 
-  override fun textMessage(sender: Int, message: String): Message {
-    TODO("Not yet implemented")
-  }
+class EncryptingMessageFactory(private val messageFactory: MessageFactory, private val encryption: EncryptionMethod) :
+    MessageFactoryDecorator(messageFactory) {
+    override fun connectionMessage(sender: Int): Message {
+        return messageFactory.connectionMessage(sender).encrypt(encryption)
+    }
 
-  override fun authenticationMessage(sender: Int, user: String, password: String): Message {
-    TODO("Not yet implemented")
-  }
+    override fun textMessage(sender: Int, message: String): Message {
+        return messageFactory.textMessage(sender, message).encrypt(encryption)
+    }
+
+    override fun coloredTextMessage(sender: Int, message: String, color: String): Message {
+        return messageFactory.coloredTextMessage(sender, message, color).encrypt(encryption)
+    }
+
+    override fun authenticationMessage(sender: Int, user: String, password: String): Message {
+        return messageFactory.authenticationMessage(sender, user, password).encrypt(encryption)
+    }
+}
+
+class AuthenticatingMessageFactory(private val messageFactory: MessageFactory) :
+    MessageFactoryDecorator(messageFactory) {
+
+    override fun authenticationMessage(sender: Int, user: String, password: String): Message {
+        return messageFactory.authenticationMessage(sender, user, password)
+    }
 
 }
 
-class AuthenticatingMessageFactory(private val messageFactory: MessageFactory):MessageFactoryDecorator(messageFactory){
+class ColoringMessageFactory(private val messageFactory: MessageFactory) : MessageFactoryDecorator(messageFactory) {
+    override fun connectionMessage(sender: Int): Message {
+        throw ConfigurationError()
+    }
 
-  override fun authenticationMessage(sender: Int, user: String, password: String): Message {
-    TODO("Not yet implemented")
-  }
+    override fun textMessage(sender: Int, message: String): Message {
+        throw ConfigurationError()
+    }
 
-}
+    override fun coloredTextMessage(sender: Int, message: String, color: String): Message {
+        return messageFactory.coloredTextMessage(sender, message, color)
+    }
 
-class ColoringMessageFactory(private val messageFactory: MessageFactory ): MessageFactoryDecorator(messageFactory){
-  override fun connectionMessage(sender: Int): Message {
-    TODO("Not yet implemented")
-  }
-
-  override fun textMessage(sender: Int, message: String): Message {
-    TODO("Not yet implemented")
-  }
-
-  override fun coloredTextMessage(sender: Int, message: String, color: String): Message {
-    TODO("Not yet implemented")
-  }
-
-  override fun authenticationMessage(sender: Int, user: String, password: String): Message {
-    TODO("Not yet implemented")
-  }
+    override fun authenticationMessage(sender: Int, user: String, password: String): Message {
+        throw ConfigurationError()
+    }
 
 }
-
 
 
 // TODO: implement task b)
@@ -170,20 +211,23 @@ class ColoringMessageFactory(private val messageFactory: MessageFactory ): Messa
 // Server
 //==============================================================================
 interface ChatServer : NetworkClient<Message> {
-  override fun handleMessage(message: Message): Boolean
-  val messageFactory: MessageFactory
+    override fun handleMessage(message: Message): Boolean
+    val messageFactory: MessageFactory
 }
 
-open class ChatServerImpl(override val messageFactory: MessageFactory, val network : NetworkSimulator<Message>) : ChatServer {
-  override var networkAddress: Int = 0
+open class ChatServerImpl(override val messageFactory: MessageFactory, val network: NetworkSimulator<Message>) :
+    ChatServer {
+    override var networkAddress by Delegates.notNull<Int>()
 
-  override fun handleMessage(message: Message): Boolean {
-
-  }
+    override fun handleMessage(message: Message): Boolean {
+        val sender = message.sender
+        network.sendMessage(sender, message)
+        return true
+    }
 
 }
 
-abstract class ChatServerDecorator(private val chatServer: ChatServer): ChatServer{
+abstract class ChatServerDecorator(private val chatServer: ChatServer) : ChatServer {
     override val messageFactory: MessageFactory
         get() = chatServer.messageFactory
 
@@ -199,15 +243,34 @@ abstract class ChatServerDecorator(private val chatServer: ChatServer): ChatServ
 }
 
 class LoggingServer(
-  val chatServer: ChatServer): ChatServerDecorator(chatServer){
-
+    val chatServer: ChatServer
+) : ChatServerDecorator(chatServer) {
+    val logger = Logger()
 }
 
-class EncryptingServer(val chatServer: ChatServer, val encryption: EncryptionMethod): ChatServerDecorator(chatServer){
-
+class EncryptingServer(val chatServer: ChatServer, val encryption: EncryptionMethod) : ChatServerDecorator(chatServer) {
+    override fun handleMessage(message: Message): Boolean {
+        val decryptedMessage = message.decrypt(encryption)
+        return chatServer.handleMessage(decryptedMessage)
+    }
 }
 
-class AuthenticatingServer(val chatServer: ChatServer, clients: MutableMap<String,String>): ChatServerDecorator(chatServer){
+class AuthenticatingServer(val chatServer: ChatServer, clients: Map<String, String>) :
+    ChatServerDecorator(chatServer) {
+    private val registeredUsers: Map<String, String> = HashMap()
+    private val unauthenticatedClients: MutableSet<Int> = mutableSetOf()
+
+    override fun handleMessage(message: Message): Boolean {
+        if (message is AuthenticationMessage) {
+            val sender = message.sender
+            val username = message.username
+            val password = message.password
+            if (registeredUsers[username] == password){
+                unauthenticatedClients.remove(sender)
+            }
+        }
+        return true
+    }
 
 }
 
@@ -217,17 +280,17 @@ class AuthenticatingServer(val chatServer: ChatServer, clients: MutableMap<Strin
 // Client
 //==============================================================================
 interface ChatClient : NetworkClient<Message> {
-  val view: View
-  val messageFactory: MessageFactory
-  override fun handleMessage(message: Message): Boolean
+    val view: View
+    val messageFactory: MessageFactory
+    override fun handleMessage(message: Message): Boolean
 
-  fun connect(serverId: Int)
-  fun send(message: String)
-  fun send(message: String, color: String)
-  fun authenticate(username: String, password: String)
+    fun connect(serverId: Int)
+    fun send(message: String)
+    fun send(message: String, color: String)
+    fun authenticate(username: String, password: String)
 }
 
-abstract class ChatClientDecorator(private val chatClient:ChatClient): ChatClient{
+abstract class ChatClientDecorator(private val chatClient: ChatClient) : ChatClient {
     override val view: View
         get() = chatClient.view
     override val messageFactory: MessageFactory
@@ -253,60 +316,73 @@ abstract class ChatClientDecorator(private val chatClient:ChatClient): ChatClien
         chatClient.authenticate(username, password)
     }
 
-    override var networkAddress: Int
-        get() = chatClient.networkAddress
-        set(value) {
-            chatClient.networkAddress = value
+    override var networkAddress by Delegates.notNull<Int>()
+
+}
+
+class LoggingClient(private val chatClient: ChatClient) : ChatClientDecorator(chatClient) {
+    val logger = Logger()
+
+    override fun handleMessage(message: Message) : Boolean{
+        logger.log("Received message from sender ${message.sender}")
+        return chatClient.handleMessage(message)
+    }
+}
+
+class EncryptingClient(private val chatClient: ChatClient, private val encryption: EncryptionMethod) :
+    ChatClientDecorator(chatClient) {
+    override fun handleMessage(message: Message): Boolean {
+        val decryptedMessage = message.decrypt(encryption)
+        return chatClient.handleMessage(decryptedMessage)
+    }
+}
+
+class AuthenticatingClient(private val chatClient: ChatClient) : ChatClientDecorator(chatClient) {
+    val isAuthenticated = false
+    override fun authenticate(username: String, password: String) {
+        if (!isAuthenticated){
+            chatClient.authenticate(username, password)
         }
-}
-
-class LoggingClient(private val chatClient: ChatClient): ChatClientDecorator(chatClient){
+    }
 
 }
 
-class EncryptingClient(private val chatClient: ChatClient, private val encryption:EncryptionMethod): ChatClientDecorator(chatClient){
-
-}
-
-class AuthenticatingClient(private val chatClient: ChatClient): ChatClientDecorator(chatClient){
-
-}
-
-class ColoringClient(private val chatClient: ChatClient): ChatClientDecorator(chatClient){
+class ColoringClient(private val chatClient: ChatClient) : ChatClientDecorator(chatClient) {
 
 }
 
 
+class ChatClientImpl(override val messageFactory: MessageFactory, val network: NetworkSimulator<Message>) : ChatClient {
+    override val view: View = View()
+    val logger = Logger()
+    val serverId :Int? = null
+    val authenticated = false
+    override var networkAddress by Delegates.notNull<Int>()
 
-class ChatClientImpl(messageFactory: MessageFactory, network: NetworkSimulator<Message>) : ChatClient {
-  override val view: View
-    get() = TODO("Not yet implemented")
-  override val messageFactory: MessageFactory
-    get() = TODO("Not yet implemented")
+    override fun handleMessage(message: Message): Boolean {
+        TODO("Not yet implemented")
+    }
 
-  override fun handleMessage(message: Message): Boolean {
-    TODO("Not yet implemented")
-  }
+    override fun connect(serverId: Int) {
+        network.sendMessage(serverId, messageFactory.connectionMessage(networkAddress))
 
-  override fun connect(serverId: Int) {
-    TODO("Not yet implemented")
-  }
+    }
 
-  override fun send(message: String) {
-    TODO("Not yet implemented")
-  }
+    override fun send(message: String) {
+        val textMessage = messageFactory.textMessage(networkAddress, message)
+        network.sendMessage(serverId!!, textMessage)
+    }
 
-  override fun send(message: String, color: String) {
-    TODO("Not yet implemented")
-  }
+    override fun send(message: String, color: String) {
+        val textMessage = messageFactory.coloredTextMessage(networkAddress, message, color)
+        network.sendMessage(serverId!!, textMessage)
+    }
 
-  override fun authenticate(username: String, password: String) {
-    TODO("Not yet implemented")
-  }
+    override fun authenticate(username: String, password: String) {
+        val authMessage = messageFactory.authenticationMessage(networkAddress, username, password)
+        network.sendMessage(serverId!!, authMessage)
+    }
 
-  override var networkAddress: Int
-    get() = TODO("Not yet implemented")
-    set(value) {}
 }
 
 
